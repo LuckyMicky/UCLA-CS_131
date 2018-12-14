@@ -1,0 +1,67 @@
+(* Warm-up *) 
+To start with, I first focus on the differences between these two styles. In 
+Homework1, the grammar is of the form: (start_symbol, [[lhs1, rhs1]; [lhs2, rhs
+2]; ...]) The first item in the pair is the starting symbol, which indicates 
+where the parsing should begin. The second item is a list of rule pairs. The 
+Homework2-grammar is of the form: (start_symbol, fun x -> [rhs1; rhs2; ...]) 
+since the type of the convert function is: val convert_grammar : 'a * ('b * 'c
+) list -> 'a * ('b -> 'c list) = <fun>. (However, when I wrote the code, I did 
+not write in the form of "fun x -> [...]". Instead, I directly wrote ..., (
+convert_rules rules []) where convert_rules is the recursive helper function 
+which takes three arguments.) I find out that when I convert the grammar, the 
+first item, which is the start symbol, is the same. What I need to do now is to
+convert the list of rule pairs into a lambda function, which maps from the 
+parameter x to the corresponding rhs in our rules. To solve this, I write a 
+recursive helper function that can recursively add each rule pair in the 
+original list to the lambda function.
+
+Then I considered two possible approaches. The first way is to do the parsing 
+from the bottom (eg. "1", "+", "3") to the top. We first match tokens to 
+terminal symbols from left to right, and then match those terminals to our 
+rules. However, it would be easy to miss cases by matching upwards. Meanwhile,
+I could not make sure that the derivation built in this direction has the
+leftmost priority. According to the spec, the derivation should be a leftmost
+derivation. Therefore, I rejected this method. The second way of parsing is to 
+do it from the top to the bottom, by expanding the leftmost nonterminals. It
+reminds me of DFS traversal, which is good for backtracking. 
+
+Next, we need to construct two matcher functions. As mentioned above, matchers
+are functions that match a prefix of fragments. Inside the matcher function, it
+should call the corresponding acceptor to see whether the suffix can pass the 
+acceptor or not. If there is no prefix, return None. If the acceptor returns 
+None, we should use the next matching prefix. The prefix might be either a 
+terminal symbol or a nonterminal symbol. Meanwhile, for each symbol/prefix, 
+there might be more than one rules. We need to take care of all these cases. 
+
+or_matcher: This matcher is designed to deals with the "disjunction" produced 
+by symbols with several rules, since here might be more than one rule to worry
+about. We need to create a choice point for alternatives when parsing. It takes
+the full rule list, the prefix, the rule alternatives, the acceptor, current 
+derivation, and the fragment as its input. It calls the and_matcher to 
+recursively check the suffix. If and_matcher returns None, it means we need 
+to pick the next rule in the list of rule alternatives and call or_matcher 
+again. Otherwise, we accept this step of derivation and move on.
+
+and_matcher: This matcher is a recursive function that deals with the "and"
+cases. We use this function to completely match the suffix with the symbols in
+our rules. If current symbol is a nonterminal, it means we need to go deeper by
+calling or_matcher to find possible derivations for this symbol. In this case,
+the acceptor function that we pass into or_matcher needs to be updated. If the
+symbol is a terminal, we can check by matching the head of the current fragment
+with the symbol. If they match, we keep going by recursive calls. Otherwise, 
+return None.  
+
+(* Problems I encountered & Weakness of the parser *)
+It took me a long time to understand the usage of the acceptor and the way to 
+update it on the fly. After I read the TA's response regarding to this issue on
+Piazza, I learned that the "inner acceptor" is formed by calling the matcher 
+with the full list of rules, the rest of alternatives and the old acceptor. In
+this way, we can form the curried function with two arguments: a derivation and
+a fragment (since and_matcher takes five arguments and the last two are left
+blank when we call and_matcher to form the new acceptor). In addition, when I 
+implemented the and_matcher function, there were bugs in pattern matchings. 
+
+This parser requires the input grammar to have some special qualities, or it 
+might fail. For example, if we have Expr -> [N Expr; N Binop; N Term] instead 
+of Expr -> [N Term; N Binop; N Expr], it will repeatedly parse 'Expr' by 
+calling or_match, which results in an infinite loop.
